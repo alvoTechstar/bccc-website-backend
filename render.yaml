@@ -1,0 +1,39 @@
+databases:
+  - name: bccc-db
+    databaseName: bccc
+    user: bccc
+    plan: free
+
+services:
+  - type: web
+    name: bccc-backend
+    runtime: node
+    plan: free
+    buildCommand: npm ci && npm run build && npx prisma migrate deploy
+    startCommand: npm start
+    healthCheckPath: /healthz
+    envVars:
+      - key: NODE_VERSION
+        value: 20.18.0
+      - key: DATABASE_URL
+        fromDatabase:
+          name: bccc-db
+          property: connectionString
+      - key: ALLOWED_ORIGINS
+        value: "*"
+      - key: MPESA_API_URL
+        value: https://sandbox.safaricom.co.ke/mpesa/stkpush/v1/processrequest
+      - key: MPESA_AUTH_URL
+        value: https://sandbox.safaricom.co.ke/oauth/v1/generate?grant_type=client_credentials
+      - key: MPESA_CONSUMER_KEY
+        sync: false
+      - key: MPESA_CONSUMER_SECRET
+        sync: false
+      - key: MPESA_PAYBILL_NUMBER
+        value: 174379
+      - key: MPESA_PASSKEY
+        sync: false
+      - key: YOUR_APP_URL
+        value: https://bccc-backend.onrender.com
+      - key: MPESA_CALLBACK_URL
+        value: https://bccc-backend.onrender.com/api/mpesa/callback
