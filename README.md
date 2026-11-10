@@ -18,7 +18,41 @@ restructured into `routes / controllers / services / validators / utils / middle
 - `GET /api/blog/posts[?limit=]`, `GET /api/blog/posts/:id`, `GET /api/blog/categories/:category`
 - `POST /api/contact`, `GET /api/contact/messages`
 - `POST /api/giving`, `GET /api/giving/records`, `GET /api/giving/records/:id/status`
-- `POST /api/mpesa/callback`
+- `POST /api/newsletter/subscribe` (`{ email, name?, source? }`) — idempotent, sends welcome email
+- `GET /api/newsletter/subscribers`
+- Giving accepts optional `email`; on first transition to `completed` (callback or
+  query-status sync) a thank-you email goes out. Contact form `newsletter: true`
+  auto-subscribes the sender.
+
+## Email (nodemailer SMTP)
+
+Set `SMTP_HOST / SMTP_PORT / EMAIL_USER / SMTP_PASS / EMAIL_FROM` (see `.env.example`;
+Render vars are pre-wired in `render.yaml` as secrets). Works with Gmail app passwords,
+SendGrid, etc. Sending is always best-effort: subscribe/giving/callback succeed even if
+email is unconfigured or fails — failures are only logged.
+- `GET /api/mpesa/status/:id` — fallback: queries Daraja for the stored
+  CheckoutRequestID and syncs the giving record (use when a callback is missed)
+
+## M-Pesa callback (public URL)
+
+Daraja must be able to reach your server, so the callback needs a public HTTPS URL:
+
+- **Render (accessible):** after deploy, set
+  `MPESA_CALLBACK_URL=https://<your-service>.onrender.com/api/mpesa/callback`
+  in the Render dashboard (and `YOUR_APP_URL` to the same origin).
+  The `render.yaml` default uses `https://bccc-backend.onrender.com/...` — update it
+  to your real service URL if different.
+- **Local dev:** Safaricom cannot reach `localhost`. Expose the server with a tunnel
+  (e.g. `ngrok http 3001`) and set
+  `MPESA_CALLBACK_URL=https://<your-tunnel>.ngrok.io/api/mpesa/callback` in `.env`.
+  (Note: the old biztrack backend used `http://127.0.0.1:3000/...`, which Daraja can
+  never reach — it relies solely on query/polling instead.)
+- The callback handler always answers HTTP 200 so Daraja never retry-storms, looks
+  the record up by `CheckoutRequestID` first (falling back to the account reference),
+  and marks it `completed`/`failed`.
+- Robustness fallback (same pattern as biztrack): if a callback is missed (e.g. the
+  free-tier server was asleep), the frontend can poll `GET /api/giving/records/:id/status`
+  or trigger a live Daraja check via `GET /api/mpesa/status/:id`.
 
 ## Render deploy
 

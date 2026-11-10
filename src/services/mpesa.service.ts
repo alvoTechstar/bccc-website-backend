@@ -134,6 +134,48 @@ class MpesaService {
       }
     }
   }
+
+  /**
+   * Query the status of an STK push via Daraja's STK push query API.
+   * Used as a fallback when the callback is delayed or missed
+   * (e.g. server asleep on free-tier hosting).
+   */
+  public async queryTransactionStatus(checkoutRequestId: string): Promise<any> {
+    if (!checkoutRequestId) {
+      throw new Error("CheckoutRequestID is required");
+    }
+
+    const token = await this.getAccessToken();
+    const businessShortCode = env.mpesa.paybillNumber;
+    const passkey = env.mpesa.passkey;
+    if (!passkey) {
+      throw new Error("MPESA_PASSKEY is not set.");
+    }
+
+    const timestamp = new Date().toISOString().replace(/[-:T.Z]/g, "").slice(0, -3);
+    const password = Buffer.from(
+      `${businessShortCode}${passkey}${timestamp}`
+    ).toString("base64");
+
+    const response = await axios.post(
+      env.mpesa.queryUrl,
+      {
+        BusinessShortCode: businessShortCode,
+        Password: password,
+        Timestamp: timestamp,
+        CheckoutRequestID: checkoutRequestId,
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        timeout: 15000,
+      }
+    );
+
+    return response.data;
+  }
 }
 
 export const mpesaService = new MpesaService();

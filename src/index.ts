@@ -7,6 +7,7 @@ import { errorHandler, notFound } from "./middleware/errorHandler";
 import { requestLogger } from "./middleware/requestLogger";
 import { connectToDb } from "./config/prisma";
 import { env } from "./config/env";
+import { facebookService } from "./services/facebook.service";
 
 // Load environment variables FIRST
 dotenv.config();
@@ -48,6 +49,8 @@ async function startServer() {
     app.listen(env.port, () => {
       console.log(`Server is running on port ${env.port}`);
     });
+
+    startFacebookSyncScheduler();
   } catch (error) {
     console.error("Failed to start server:", error);
     process.exit(1);
@@ -57,4 +60,27 @@ async function startServer() {
 // Only auto-start when run directly (not when imported for tests)
 if (require.main === module) {
   startServer();
+}
+
+/**
+ * Periodically pull the church Facebook page into blog_posts.
+ * Enabled only when FACEBOOK_PAGE_ID + FACEBOOK_PAGE_ACCESS_TOKEN are set
+ * and FACEBOOK_SYNC_INTERVAL_MINUTES > 0. Failures are logged, never fatal.
+ */
+function startFacebookSyncScheduler(): void {
+  const minutes = env.facebook.syncIntervalMinutes;
+  if (!facebookService.isConfigured() || minutes <= 0) {
+    return;
+  }
+  console.log(`Facebook sync scheduler enabled: every ${minutes} minute(s).`);
+  const run = async () => {
+    try {
+      await facebookService.syncFacebookPosts();
+    } catch (error) {
+      console.error("Scheduled Facebook sync failed:", (error as Error).message);
+    }
+  };
+  // Initial sync shortly after boot, then on the interval.
+  setTimeout(run, 30_000);
+  setInterval(run, minutes * 60_000);
 }

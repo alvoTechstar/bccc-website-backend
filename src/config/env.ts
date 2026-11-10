@@ -30,8 +30,31 @@ export const env = {
     passkey: process.env.MPESA_PASSKEY ?? "",
     callbackUrl:
       process.env.MPESA_CALLBACK_URL ?? "https://yourdomain.com/api/mpesa/callback",
+    queryUrl:
+      process.env.MPESA_QUERY_URL ??
+      "https://sandbox.safaricom.co.ke/mpesa/stkpushquery/v1/query",
   },
   appUrl: process.env.YOUR_APP_URL ?? `http://localhost:${process.env.PORT ?? 3001}`,
+  email: {
+    smtpHost: process.env.SMTP_HOST ?? "smtp.gmail.com",
+    smtpPort: Number(process.env.SMTP_PORT ?? 587),
+    emailUser: process.env.EMAIL_USER ?? "",
+    smtpPass: process.env.SMTP_PASS ?? "",
+    from: process.env.EMAIL_FROM ?? "",
+  },
+  facebook: {
+    // Set these to enable the Facebook -> blog auto-sync
+    // (POST /api/blog/posts/sync/facebook + optional interval scheduler).
+    // Setup: Meta app with a Page access token for the church page
+    // (long-lived Page tokens do not expire). Keep the token server-side only.
+    pageId: process.env.FACEBOOK_PAGE_ID ?? "",
+    pageAccessToken: process.env.FACEBOOK_PAGE_ACCESS_TOKEN ?? "",
+    graphVersion: process.env.FACEBOOK_GRAPH_VERSION ?? "v22.0",
+    syncIntervalMinutes: Number(process.env.FACEBOOK_SYNC_INTERVAL_MINUTES ?? 0),
+    // Optional shared secret guarding the manual sync endpoint.
+    // If set, callers must send it as `x-sync-secret`.
+    syncSecret: process.env.SYNC_SECRET ?? "",
+  },
 };
 
 export function assertDatabaseUrl(): string {

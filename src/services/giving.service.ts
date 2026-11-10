@@ -15,6 +15,7 @@ export const givingService = {
         amount: data.amount,
         givingType: data.givingType,
         phoneNumber: data.phoneNumber,
+        email: data.email,
         message: data.message,
       },
     });
@@ -33,16 +34,27 @@ export const givingService = {
     return record ? toDTO(record) : undefined;
   },
 
+  async getByCheckoutRequestId(
+    checkoutRequestId: string
+  ): Promise<GivingRecordDTO | undefined> {
+    const record = await prisma.givingRecord.findUnique({
+      where: { checkoutRequestId },
+    });
+    return record ? toDTO(record) : undefined;
+  },
+
   async updateStatus(
     id: string,
     status: string,
-    transactionId?: string
+    transactionId?: string,
+    checkoutRequestId?: string
   ): Promise<GivingRecordDTO | undefined> {
     const record = await prisma.givingRecord.update({
       where: { id },
       data: {
         status,
         ...(transactionId ? { transactionId } : {}),
+        ...(checkoutRequestId ? { checkoutRequestId } : {}),
       },
     });
     return toDTO(record);

@@ -37,3 +37,23 @@ services:
         value: https://bccc-backend.onrender.com
       - key: MPESA_CALLBACK_URL
         value: https://bccc-backend.onrender.com/api/mpesa/callback
+      - key: SMTP_HOST
+        value: smtp.gmail.com
+      - key: SMTP_PORT
+        value: 587
+      - key: EMAIL_USER
+        sync: false
+      - key: SMTP_PASS
+        sync: false
+      - key: EMAIL_FROM
+        sync: false
+      - key: FACEBOOK_PAGE_ID
+        sync: false
+      - key: FACEBOOK_PAGE_ACCESS_TOKEN
+        sync: false
+      - key: FACEBOOK_GRAPH_VERSION
+        value: v22.0
+      - key: FACEBOOK_SYNC_INTERVAL_MINUTES
+        value: 60
+      - key: SYNC_SECRET
+        sync: false

@@ -71,11 +71,19 @@ export const givingController = {
       );
 
       if (mpesaResponse.ResponseCode === "0") {
-        await givingService.updateStatus(record.id, "initiated", stkTransactionId);
+        const checkoutRequestId: string | undefined =
+          mpesaResponse.CheckoutRequestID;
+        await givingService.updateStatus(
+          record.id,
+          "initiated",
+          stkTransactionId,
+          checkoutRequestId
+        );
         res.status(201).json({
           message: "Giving record created. Please check your M-Pesa for a prompt.",
           id: record.id,
           transactionId: stkTransactionId,
+          checkoutRequestId,
           phone: displayPhoneNumber(validatedData.phoneNumber),
           instructions:
             "You will receive an M-Pesa prompt on your phone shortly. Approve the transaction.",
