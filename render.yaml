@@ -34,9 +34,9 @@ services:
       - key: MPESA_PASSKEY
         sync: false
       - key: YOUR_APP_URL
-        value: https://bccc-backend.onrender.com
+        value: https://bccc-website-backend.onrender.com
       - key: MPESA_CALLBACK_URL
-        value: https://bccc-backend.onrender.com/api/mpesa/callback
+        value: https://bccc-website-backend.onrender.com/api/mpesa/callback
       - key: SMTP_HOST
         value: smtp.gmail.com
       - key: SMTP_PORT
