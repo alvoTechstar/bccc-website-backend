@@ -9,8 +9,23 @@ datasource db {
 
 model User {
   id       String @id @default(uuid())
+  // Legacy username login (kept for backward-compat).
   username String @unique
-  password String
+  // Nullable: invited admins have NULL until they accept the invite
+  // and set their password via /admin/set-password.
+  password String?
+
+  name     String?
+  email    String?  @unique
+  // "superadmin" (manage users) or "admin" (everything else).
+  role     String   @default("admin")
+  active   Boolean  @default(true)
+  // True until the admin sets their own password (invite accept / reset).
+  mustSetPassword Boolean @default(true)
+
+  lastLoginAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@map("users")
 }
@@ -23,6 +38,9 @@ model BlogPost {
   category  String
   author    String
   imageUrl  String?
+  // All uploaded images (first doubles as the cover). Stored as
+  // relative paths ("/uploads/...") so the store can move later.
+  images    String[] @default([])
   published Boolean  @default(true)
   // Origin of the post: "local" (written in-house) or "facebook" (synced
   // from the church Facebook page by facebook.service.ts).
@@ -72,4 +90,59 @@ model NewsletterSubscriber {
   createdAt DateTime @default(now())
 
   @@map("newsletter_subscribers")
+}
+
+model Event {
+  id          String   @id @default(uuid())
+  title       String
+  description String
+  date        String
+  time        String?
+  venue       String?
+  category    String   @default("General")
+  imageUrl    String?
+  images      String[] @default([])
+  published   Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("events")
+}
+
+enum OtpType {
+  login
+  reset
+  verification
+}
+
+enum OtpStatus {
+  pending
+  consumed
+  expired
+  revoked
+}
+
+// Password-reset OTPs — same design as BizTrack (6-digit code,
+// 10-minute expiry, previous pending codes revoked per send).
+model Otp {
+  id          String    @id @default(uuid())
+  email       String
+  originalOtp String
+  maskedOtp   String?
+  type        OtpType   @default(reset)
+  userId      String?
+  expiresAt   DateTime
+  status      OtpStatus @default(pending)
+  consumedAt  DateTime?
+  attempts    Int       @default(0)
+  ipAddress   String?
+  userAgent   String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([email])
+  @@index([userId])
+  @@index([expiresAt])
+  @@index([createdAt])
+  @@map("otps")
 }

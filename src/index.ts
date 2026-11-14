@@ -8,6 +8,7 @@ import { requestLogger } from "./middleware/requestLogger";
 import { connectToDb } from "./config/prisma";
 import { env } from "./config/env";
 import { facebookService } from "./services/facebook.service";
+import { uploadsDir } from "./middleware/upload";
 
 // Load environment variables FIRST
 dotenv.config();
@@ -26,6 +27,9 @@ app.use(
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
+
+// Uploaded images/videos (blog posts, events, media publishes).
+app.use("/uploads", express.static(uploadsDir, { maxAge: "7d" }));
 
 app.get("/", (_req: Request, res: Response) => {
   res.send("<h1>Server is Running!</h1><p>BCC backend (Node + Prisma + Postgres).</p>");

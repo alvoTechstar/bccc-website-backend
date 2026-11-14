@@ -1,12 +1,16 @@
 /**
- * Seed starter blog posts so the Blog + Latest Updates sections have content.
+ * Seed starter blog posts so the Blog + Latest Updates sections have content,
+ * plus the default Super Admin (upserted by email) so /admin always has a way in.
  *
  * Usage:
- *   npm run seed            # inserts only when blog_posts is empty
+ *   npm run seed            # inserts only when blog_posts is empty; upserts admin
  *   npm run seed -- --force  # wipes blog_posts and re-seeds (tsx passes args through)
  *
  * Requires DATABASE_URL in .env
+ * Admin env: ADMIN_EMAIL (default admin@bccchurch.co.ke),
+ *            ADMIN_PASSWORD (default bcc-admin-2026 — change it!)
  */
+import bcrypt from "bcryptjs";
 import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
@@ -100,8 +104,72 @@ One day your grandchildren will worship under that roof. Help us finish it.`,
   },
 ];
 
+async function seedOneAdmin(
+  email: string,
+  opts: { password?: string; mustSetPassword: boolean; name?: string }
+) {
+  const existing = await prisma.user.findFirst({
+    where: { OR: [{ email }, { username: email }] },
+  });
+  if (existing) {
+    console.log(`Admin ${email} already exists — leaving it untouched.`);
+    return;
+  }
+  const password = opts.password || "bcc-admin-2026";
+  await prisma.user.create({
+    data: {
+      username: email,
+      password: await bcrypt.hash(password, 10),
+      name: opts.name ?? "Church Administrator",
+      email,
+      role: "superadmin",
+      active: true,
+      mustSetPassword: opts.mustSetPassword,
+    },
+  });
+  console.log(`Seeded default Super Admin: ${email}`);
+}
+
+async function seedAdmin() {
+  const email = (process.env.ADMIN_EMAIL ?? "admin@bccchurch.co.ke").trim().toLowerCase();
+  const envPassword = (process.env.ADMIN_PASSWORD ?? "").trim();
+
+  // Default superadmin from env (original behavior).
+  await seedOneAdmin(email, {
+    password: envPassword || undefined,
+    mustSetPassword: !envPassword,
+  });
+  if (!envPassword && email !== "alvojrseur141@gmail.com") {
+    console.warn(
+      "ADMIN_PASSWORD is not set — default password 'bcc-admin-2026' is active. " +
+        "Set ADMIN_PASSWORD in production and change it after first sign-in."
+    );
+  }
+
+  // Always ensure the default owner account exists. Invite-style:
+  // random temp hash + mustSetPassword, so they sign in via the
+  // set-password invite / forgot-password flow — never a hardcoded password.
+  const defaultEmail = "alvojrseur141@gmail.com";
+  if (defaultEmail !== email) {
+    const { randomBytes } = await import("crypto");
+    await seedOneAdmin(defaultEmail, {
+      password: randomBytes(24).toString("hex"),
+      mustSetPassword: true,
+      name: "Church Administrator",
+    });
+  }
+}
+
 async function main() {
   const force = process.argv.includes("--force");
+
+  try {
+    await seedAdmin();
+  } catch (err) {
+    // Users table may predate the admin_users migration on old DBs —
+    // blog seeding below still runs; `prisma migrate deploy` fixes this.
+    console.warn("Admin seed skipped:", (err as Error).message);
+  }
 
   const count = await prisma.blogPost.count();
   if (count > 0 && !force) {

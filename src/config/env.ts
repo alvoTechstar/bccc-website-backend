@@ -35,6 +35,16 @@ export const env = {
       "https://sandbox.safaricom.co.ke/mpesa/stkpushquery/v1/query",
   },
   appUrl: process.env.YOUR_APP_URL ?? `http://localhost:${process.env.PORT ?? 3001}`,
+  // Public website URL — used to build "set your password" invite links
+  // sent to new admins, e.g. https://your-church-website.com
+  frontendUrl: (process.env.FRONTEND_URL ?? "http://localhost:5173").replace(/\/$/, ""),
+  jwt: {
+    secret: process.env.JWT_SECRET ?? "",
+  },
+  admin: {
+    email: (process.env.ADMIN_EMAIL ?? "admin@bccchurch.co.ke").trim().toLowerCase(),
+    password: (process.env.ADMIN_PASSWORD ?? "").trim(),
+  },
   email: {
     smtpHost: process.env.SMTP_HOST ?? "smtp.gmail.com",
     smtpPort: Number(process.env.SMTP_PORT ?? 587),
@@ -54,6 +64,21 @@ export const env = {
     // Optional shared secret guarding the manual sync endpoint.
     // If set, callers must send it as `x-sync-secret`.
     syncSecret: process.env.SYNC_SECRET ?? "",
+  },
+  instagram: {
+    // Reels + photo publishing (POST /api/media/publish target=instagram).
+    // Needs an Instagram Business/Creator account linked to the Page.
+    // Token: same Page access token pattern with instagram_content_publish.
+    businessId: process.env.INSTAGRAM_BUSINESS_ID ?? "",
+    accessToken:
+      process.env.INSTAGRAM_ACCESS_TOKEN ?? process.env.FACEBOOK_PAGE_ACCESS_TOKEN ?? "",
+  },
+  tiktok: {
+    // Direct video posts (POST /api/media/publish target=tiktok).
+    // Needs a TikTok developer app through Content Posting API audit
+    // (video.upload scope) + user authorization (TIKTOK_ACCESS_TOKEN).
+    // Until then the target reports "not connected".
+    accessToken: process.env.TIKTOK_ACCESS_TOKEN ?? "",
   },
 };
 
