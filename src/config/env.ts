@@ -29,7 +29,8 @@ export const env = {
     paybillNumber: process.env.MPESA_PAYBILL_NUMBER ?? "174379",
     passkey: process.env.MPESA_PASSKEY ?? "",
     callbackUrl:
-      process.env.MPESA_CALLBACK_URL ?? "https://yourdomain.com/api/mpesa/callback",
+      process.env.MPESA_CALLBACK_URL ??
+      `${process.env.YOUR_APP_URL ?? `http://localhost:${process.env.PORT ?? 3001}`}/api/mpesa/callback`,
     queryUrl:
       process.env.MPESA_QUERY_URL ??
       "https://sandbox.safaricom.co.ke/mpesa/stkpushquery/v1/query",

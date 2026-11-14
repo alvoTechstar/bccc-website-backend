@@ -21,10 +21,16 @@ services:
           property: connectionString
       - key: ALLOWED_ORIGINS
         value: "*"
+      # ---- M-Pesa: SANDBOX (testing). Go-live = replace the 5 values
+      # below with the production block at the bottom of this file,
+      # commit, push. Blueprint sync overwrites dashboard edits to
+      # `value:` keys, so keep go-live values HERE, not in the dashboard.
       - key: MPESA_API_URL
         value: https://sandbox.safaricom.co.ke/mpesa/stkpush/v1/processrequest
       - key: MPESA_AUTH_URL
         value: https://sandbox.safaricom.co.ke/oauth/v1/generate?grant_type=client_credentials
+      - key: MPESA_QUERY_URL
+        value: https://sandbox.safaricom.co.ke/mpesa/stkpushquery/v1/query
       - key: MPESA_CONSUMER_KEY
         sync: false
       - key: MPESA_CONSUMER_SECRET
@@ -33,6 +39,15 @@ services:
         value: 174379
       - key: MPESA_PASSKEY
         sync: false
+      # ---- M-Pesa: PRODUCTION (go-live). Swap the 5 values above with
+      # these after Daraja approves the live app, then commit + push:
+      # MPESA_API_URL=https://api.safaricom.co.ke/mpesa/stkpush/v1/processrequest
+      # MPESA_AUTH_URL=https://api.safaricom.co.ke/oauth/v1/generate?grant_type=client_credentials
+      # MPESA_QUERY_URL=https://api.safaricom.co.ke/mpesa/stkpushquery/v1/query
+      # MPESA_CONSUMER_KEY=<live key from Daraja>   (dashboard, sync: false)
+      # MPESA_CONSUMER_SECRET=<live secret>          (dashboard, sync: false)
+      # MPESA_PAYBILL_NUMBER=<real till/paybill>
+      # MPESA_PASSKEY=<production passkey>
       - key: YOUR_APP_URL
         value: https://bccc-website-backend.onrender.com
       - key: MPESA_CALLBACK_URL

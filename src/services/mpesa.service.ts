@@ -1,5 +1,6 @@
 import axios from "axios";
 import { env } from "../config/env";
+import { getTimestamp } from "../utils/mpesa";
 
 export interface StkPushRequest {
   BusinessShortCode: string;
@@ -73,11 +74,17 @@ class MpesaService {
         throw new Error("MPESA_PASSKEY is not set.");
       }
 
-      // Generate timestamp and password (sandbox for now)
-      const timestamp = new Date().toISOString().replace(/[-:T.Z]/g, "").slice(0, -3);
+      // Daraja password uses EAT timestamp (see utils/mpesa getTimestamp).
+      const timestamp = getTimestamp();
       const password = Buffer.from(
         `${businessShortCode}${passkey}${timestamp}`
       ).toString("base64");
+
+      if (env.mpesa.callbackUrl.includes("yourdomain.com")) {
+        console.warn(
+          "MPESA_CALLBACK_URL still points at yourdomain.com — set it to https://<your-backend>/api/mpesa/callback or status will never update."
+        );
+      }
 
       const stkRequest: StkPushRequest = {
         BusinessShortCode: businessShortCode,
@@ -152,7 +159,7 @@ class MpesaService {
       throw new Error("MPESA_PASSKEY is not set.");
     }
 
-    const timestamp = new Date().toISOString().replace(/[-:T.Z]/g, "").slice(0, -3);
+    const timestamp = getTimestamp();
     const password = Buffer.from(
       `${businessShortCode}${passkey}${timestamp}`
     ).toString("base64");

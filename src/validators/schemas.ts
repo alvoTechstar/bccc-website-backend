@@ -61,6 +61,7 @@ export const givingRecordSchema = z.object({
     return val;
   }),
   givingType: z.string(),
+  name: z.string().optional(),
   phoneNumber: z.string().min(1, "Phone number is required"),
   email: z.string().email("Invalid email address").optional(),
   message: z.string().optional(),

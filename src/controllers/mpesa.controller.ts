@@ -11,6 +11,11 @@ function ack(res: Response, checkoutRequestID?: string) {
   });
 }
 
+// Throttle Daraja status queries: frontend polls often, Daraja 429s fast.
+// Max 1 live query per record per 20s — otherwise return local status.
+const lastLiveQuery = new Map<string, number>();
+const QUERY_COOLDOWN_MS = 20_000;
+
 export const mpesaController = {
   async callback(req: Request, res: Response) {
     const mpesaCallbackData = req.body;
@@ -102,6 +107,16 @@ export const mpesaController = {
       }
 
       try {
+        const now = Date.now();
+        if (now - (lastLiveQuery.get(record.id) ?? 0) < QUERY_COOLDOWN_MS) {
+          return res.status(200).json({
+            status: record.status,
+            transactionId: record.transactionId,
+            mpesaStatus: null,
+            message: "Using local giving status (query throttled)",
+          });
+        }
+        lastLiveQuery.set(record.id, now);
         const queryResponse = await mpesaService.queryTransactionStatus(
           record.checkoutRequestId
         );
@@ -141,9 +156,9 @@ export const mpesaController = {
           mpesaStatus: queryResponse,
         });
       } catch (queryError) {
+        const axiosStatus = (queryError as { response?: { status?: number } })?.response?.status;
         console.warn(
-          "Could not query M-Pesa status, returning local status:",
-          (queryError as Error).message
+          `Could not query M-Pesa status (Daraja ${axiosStatus ?? (queryError as Error).message}), returning local status.`
         );
         return res.status(200).json({
           status: record.status,

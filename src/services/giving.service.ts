@@ -14,6 +14,7 @@ export const givingService = {
       data: {
         amount: data.amount,
         givingType: data.givingType,
+        name: data.name,
         phoneNumber: data.phoneNumber,
         email: data.email,
         message: data.message,
