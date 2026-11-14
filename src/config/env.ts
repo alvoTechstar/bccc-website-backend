@@ -51,6 +51,12 @@ export const env = {
     emailUser: process.env.EMAIL_USER ?? "",
     smtpPass: process.env.SMTP_PASS ?? "",
     from: process.env.EMAIL_FROM ?? "",
+    // HTTPS email APIs (port 443) — required on Render where SMTP ports
+    // time out. Priority: Resend > SendGrid > Brevo. Resend recommended:
+    // free tier, verify one sender domain/address, set RESEND_API_KEY.
+    resendApiKey: process.env.RESEND_API_KEY ?? "",
+    sendgridApiKey: process.env.SENDGRID_API_KEY ?? "",
+    brevoApiKey: process.env.BREVO_API_KEY ?? "",
   },
   facebook: {
     // Set these to enable the Facebook -> blog auto-sync

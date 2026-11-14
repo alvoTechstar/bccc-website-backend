@@ -2,29 +2,49 @@ import nodemailer, { type Transporter } from "nodemailer";
 import { env } from "../config/env";
 
 let cachedTransporter: Transporter | null = null;
+// Null = unchecked, string = resolved provider ("smtp" or "http:<name>")
+let resolvedProvider: string | null = null;
+
+function httpProvider(): { name: "resend" | "sendgrid" | "brevo"; apiKey: string } | null {
+  const { resendApiKey, sendgridApiKey, brevoApiKey } = env.email;
+  if (resendApiKey) return { name: "resend", apiKey: resendApiKey };
+  if (sendgridApiKey) return { name: "sendgrid", apiKey: sendgridApiKey };
+  if (brevoApiKey) return { name: "brevo", apiKey: brevoApiKey };
+  return null;
+}
+
+function emailConfigured(): boolean {
+  const { emailUser, smtpPass } = env.email;
+  return Boolean(httpProvider() || (emailUser && smtpPass));
+}
 
 function getTransporter(): Transporter | null {
   if (cachedTransporter) return cachedTransporter;
+  // HTTP API providers (Resend/SendGrid/Brevo) bypass SMTP entirely — no transporter needed.
+  if (httpProvider() || resolvedProvider?.startsWith("http:")) return null;
 
   const { smtpHost, smtpPort, emailUser, smtpPass } = env.email;
   if (!emailUser || !smtpPass) {
-    console.warn("Email disabled: EMAIL_USER / SMTP_PASS are not set.");
+    console.warn("Email disabled: set RESEND_API_KEY (recommended on Render) or EMAIL_USER / SMTP_PASS.");
     return null;
   }
 
   cachedTransporter = nodemailer.createTransport({
     host: smtpHost,
     port: smtpPort,
-    secure: smtpPort === 465, // 465 = implicit TLS, 587 = STARTTLS
+    secure: smtpPort === 465, // 465 = implicit TLS, 587/2525 = STARTTLS
+    // Render + Gmail fix: force IPv4 (ETIMEDOUT is usually IPv6/DNS on Render),
+    // require STARTTLS on submission ports, and don't pool stale sockets.
+    // @ts-expect-error nodemailer SMTPConnectionOptions supports family
+    family: 4,
+    requireTLS: smtpPort === 587 || smtpPort === 2525,
+    opportunisticTLS: true,
     auth: { user: emailUser, pass: smtpPass },
-    // Render-compatible timeouts
-    connectionTimeout: 15000,
-    greetingTimeout: 10000,
-    socketTimeout: 15000,
-    // Pooled + cached across calls via the singleton
-    pool: true,
-    maxConnections: 1,
-    maxMessages: 50,
+    // Fail fast so a blocked SMTP port doesn't hang login for 15s+
+    connectionTimeout: 8000,
+    greetingTimeout: 8000,
+    socketTimeout: 10000,
+    pool: false,
   });
 
   return cachedTransporter;
@@ -36,6 +56,7 @@ function getTransporter(): Transporter | null {
  */
 export async function verifyEmailConfig(): Promise<{
   configured: boolean;
+  provider: string;
   host: string;
   port: number;
   userSet: boolean;
@@ -45,8 +66,11 @@ export async function verifyEmailConfig(): Promise<{
   error?: string;
 }> {
   const { smtpHost, smtpPort, emailUser, smtpPass, from } = env.email;
+  const http = httpProvider();
+  const provider = http ? `http:${http.name}` : "smtp";
   const base = {
-    configured: Boolean(emailUser && smtpPass),
+    configured: emailConfigured(),
+    provider,
     host: smtpHost,
     port: smtpPort,
     userSet: Boolean(emailUser),
@@ -55,7 +79,26 @@ export async function verifyEmailConfig(): Promise<{
     verified: false,
   };
   if (!base.configured) {
-    return { ...base, error: "EMAIL_USER / SMTP_PASS are not set on this server." };
+    return {
+      ...base,
+      error:
+        "No email provider configured. Set RESEND_API_KEY (recommended on Render) or EMAIL_USER / SMTP_PASS.",
+    };
+  }
+  // HTTP providers verify over HTTPS (port 443) — never blocked on Render.
+  if (http) {
+    try {
+      await sendViaHttpApi(http.name, http.apiKey, {
+        to: from || emailUser,
+        subject: "BCC email verify — please ignore",
+        html: "<p>BCC email provider check — please ignore.</p>",
+        text: "BCC email provider check — please ignore.",
+      });
+      resolvedProvider = `http:${http.name}`;
+      return { ...base, verified: true };
+    } catch (error) {
+      return { ...base, error: (error as Error).message };
+    }
   }
   try {
     const transporter = getTransporter();
@@ -74,17 +117,109 @@ export interface SendMailOptions {
   text?: string;
 }
 
-/** Best-effort send: logs and returns null when email is not configured. */
+/**
+ * HTTPS email APIs (port 443) — work on Render where SMTP ports
+ * (25/465/587) are blocked or time out (ETIMEDOUT/CONNECT_TIMEOUT).
+ * Priority: Resend > SendGrid > Brevo. Throws on failure.
+ */
+async function sendViaHttpApi(
+  provider: "resend" | "sendgrid" | "brevo",
+  apiKey: string,
+  options: SendMailOptions
+): Promise<string> {
+  const from = env.email.from || env.email.emailUser;
+  if (!from) throw new Error("EMAIL_FROM / EMAIL_USER must be set as the sender address.");
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 10000);
+  try {
+    if (provider === "resend") {
+      const res = await fetch("https://api.resend.com/emails", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          from: `BCC Church <${from}>`,
+          to: [options.to],
+          subject: options.subject,
+          html: options.html,
+          text: options.text,
+        }),
+        signal: controller.signal,
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(`Resend error (${res.status}): ${(body as { message?: string }).message ?? JSON.stringify(body)}`);
+      }
+      return (body as { id?: string }).id ?? "resend-sent";
+    }
+    if (provider === "sendgrid") {
+      const res = await fetch("https://api.sendgrid.com/v3/mail/send", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          personalizations: [{ to: [{ email: options.to }] }],
+          from: { email: from, name: "BCC Church" },
+          subject: options.subject,
+          content: [
+            ...(options.text ? [{ type: "text/plain", value: options.text }] : []),
+            { type: "text/html", value: options.html },
+          ],
+        }),
+        signal: controller.signal,
+      });
+      if (!res.ok) {
+        const text = await res.text().catch(() => "");
+        throw new Error(`SendGrid error (${res.status}): ${text.slice(0, 300)}`);
+      }
+      return "sendgrid-sent";
+    }
+    // brevo
+    const res = await fetch("https://api.brevo.com/v3/smtp/email", {
+      method: "POST",
+      headers: { "api-key": apiKey, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        sender: { name: "BCC Church", email: from },
+        to: [{ email: options.to }],
+        subject: options.subject,
+        htmlContent: options.html,
+        textContent: options.text,
+      }),
+      signal: controller.signal,
+    });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(`Brevo error (${res.status}): ${JSON.stringify(body).slice(0, 300)}`);
+    }
+    return (body as { messageId?: string }).messageId ?? "brevo-sent";
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/** Best-effort send: HTTP API (Resend/SendGrid/Brevo) first, SMTP fallback. Null when unconfigured. */
 export async function sendMail(
   options: SendMailOptions
 ): Promise<{ messageId: string; previewUrl: string | false } | null> {
+  const http = httpProvider();
+  if (http) {
+    const messageId = await sendViaHttpApi(http.name, http.apiKey, options);
+    resolvedProvider = `http:${http.name}`;
+    console.log(`Email sent to ${options.to} via ${http.name} (id: ${messageId})`);
+    return { messageId, previewUrl: false };
+  }
+
   const transporter = getTransporter();
   if (!transporter) return null;
 
-  const info = await transporter.sendMail({
+  // Fail fast: Render blocks/slow SMTP ports — don't hang login/reset for 15s.
+  const sendPromise = transporter.sendMail({
     from: `"BCC Church" <${env.email.from || env.email.emailUser}>`,
     ...options,
   });
+  const timeoutPromise = new Promise<never>((_, reject) =>
+    setTimeout(() => reject(new Error("SMTP send timed out after 10s (port likely blocked — use RESEND_API_KEY)")), 10000)
+  );
+  const info = await Promise.race([sendPromise, timeoutPromise]);
+  resolvedProvider = "smtp";
 
   const previewUrl = nodemailer.getTestMessageUrl(info);
   console.log(
@@ -175,12 +310,11 @@ export async function sendPasswordResetOtpEmail(
   to: string,
   otp: string
 ): Promise<{ success: boolean; devMode: boolean; error?: string }> {
-  const { emailUser, smtpPass } = env.email;
-  if (!emailUser || !smtpPass || !getTransporter()) {
+  if (!emailConfigured()) {
     return {
       success: false,
       devMode: true,
-      error: "Email service not configured. Set EMAIL_USER and SMTP_PASS environment variables.",
+      error: "Email service not configured. Set RESEND_API_KEY (recommended on Render) or EMAIL_USER and SMTP_PASS.",
     };
   }
   try {

@@ -41,6 +41,12 @@ services:
         value: smtp.gmail.com
       - key: SMTP_PORT
         value: 587
+      - key: RESEND_API_KEY
+        sync: false
+      - key: SENDGRID_API_KEY
+        sync: false
+      - key: BREVO_API_KEY
+        sync: false
       - key: EMAIL_USER
         sync: false
       - key: SMTP_PASS
